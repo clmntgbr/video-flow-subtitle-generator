@@ -9,6 +9,7 @@ from flask import Flask
 from celery import Celery
 from datetime import timedelta
 
+from src.Protobuf.Message_pb2 import MediaPodStatus
 from src.config import Config
 from src.s3_client import S3Client
 from src.rabbitmq_client import RabbitMQClient
@@ -56,12 +57,12 @@ def process_message(message):
 
         resultsSorted = sorted(results, key=extract_chunk_number)
         apiToSubtitleGenerator.mediaPod.originalVideo.subtitles.extend(resultsSorted)
-        apiToSubtitleGenerator.mediaPod.status = 'subtitle_generator_complete'
+        apiToSubtitleGenerator.mediaPod.status = MediaPodStatus.Name(MediaPodStatus.SUBTITLE_GENERATOR_COMPLETE)
 
         rmq_client.send_message(apiToSubtitleGenerator, "App\\Protobuf\\SubtitleGeneratorToApi")
         return True
     except Exception as e:
-        apiToSubtitleGenerator.mediaPod.status = 'subtitle_generator_error'
+        apiToSubtitleGenerator.mediaPod.status = MediaPodStatus.Name(MediaPodStatus.SUBTITLE_GENERATOR_ERROR)
         rmq_client.send_message(apiToSubtitleGenerator, "App\\Protobuf\\SubtitleGenerator")
         return False
 
