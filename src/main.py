@@ -42,32 +42,32 @@ celery.conf.update({
 
 @celery.task(name='tasks.process_message', queue=app.config['RMQ_QUEUE_READ'])
 def process_message(message):
-    apiToSubtitleGenerator: ApiToSubtitleGenerator = ProtobufConverter.json_to_protobuf(message)
+    protobuf: ApiToSubtitleGenerator = ProtobufConverter.json_to_protobuf(message)
 
     chunks = []
 
     try:
-        for audio in apiToSubtitleGenerator.mediaPod.originalVideo.audios:
+        for audio in protobuf.mediaPod.originalVideo.audios:
             chunks.append(audio)
 
-        partialMultiprocess = partial(multiprocess, apiToSubtitleGenerator=apiToSubtitleGenerator)
+        partialMultiprocess = partial(multiprocess, protobuf=protobuf)
 
         with ThreadPoolExecutor(max_workers=4) as executor:
             results = list(executor.map(partialMultiprocess, chunks))
 
         resultsSorted = sorted(results, key=extract_chunk_number)
-        apiToSubtitleGenerator.mediaPod.originalVideo.subtitles.extend(resultsSorted)
-        apiToSubtitleGenerator.mediaPod.status = MediaPodStatus.Name(MediaPodStatus.SUBTITLE_GENERATOR_COMPLETE)
+        protobuf.mediaPod.originalVideo.subtitles.extend(resultsSorted)
+        protobuf.mediaPod.status = MediaPodStatus.Name(MediaPodStatus.SUBTITLE_GENERATOR_COMPLETE)
 
-        rmq_client.send_message(apiToSubtitleGenerator, "App\\Protobuf\\SubtitleGeneratorToApi")
+        rmq_client.send_message(protobuf, "App\\Protobuf\\SubtitleGeneratorToApi")
         return True
     except Exception as e:
-        apiToSubtitleGenerator.mediaPod.status = MediaPodStatus.Name(MediaPodStatus.SUBTITLE_GENERATOR_ERROR)
-        rmq_client.send_message(apiToSubtitleGenerator, "App\\Protobuf\\SubtitleGenerator")
+        protobuf.mediaPod.status = MediaPodStatus.Name(MediaPodStatus.SUBTITLE_GENERATOR_ERROR)
+        rmq_client.send_message(protobuf, "App\\Protobuf\\SubtitleGenerator")
         return False
 
-def multiprocess(chunk: str, apiToSubtitleGenerator: ApiToSubtitleGenerator):
-    key = f"{apiToSubtitleGenerator.mediaPod.userUuid}/{apiToSubtitleGenerator.mediaPod.uuid}/audios/{chunk}"
+def multiprocess(chunk: str, protobuf: ApiToSubtitleGenerator):
+    key = f"{protobuf.mediaPod.userUuid}/{protobuf.mediaPod.uuid}/audios/{chunk}"
     tmpFilePath = f"/tmp/{chunk}"
     tmpSrtFilePath = os.path.splitext(tmpFilePath)[0] + ".srt"
     
@@ -77,7 +77,7 @@ def multiprocess(chunk: str, apiToSubtitleGenerator: ApiToSubtitleGenerator):
     if not generate_subtitle_assemblyAI(tmpFilePath, tmpSrtFilePath):
         return False
     
-    key = f"{apiToSubtitleGenerator.mediaPod.userUuid}/{apiToSubtitleGenerator.mediaPod.uuid}/subtitles/{os.path.basename(tmpSrtFilePath)}"
+    key = f"{protobuf.mediaPod.userUuid}/{protobuf.mediaPod.uuid}/subtitles/{os.path.basename(tmpSrtFilePath)}"
 
     if not s3_client.upload_file(tmpSrtFilePath, key):
             return False
