@@ -9,13 +9,12 @@ from flask import Flask
 from celery import Celery
 from datetime import timedelta
 
-from src.Protobuf.Message_pb2 import MediaPodStatus
+from src.Protobuf.Message_pb2 import MediaPodStatus, ApiToSubtitleGenerator, MediaPod
 from src.config import Config
 from src.s3_client import S3Client
 from src.rabbitmq_client import RabbitMQClient
 from src.file_client import FileClient
 from src.converter import ProtobufConverter
-from src.Protobuf.Message_pb2 import ApiToSubtitleGenerator
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -42,7 +41,10 @@ celery.conf.update({
 
 @celery.task(name='tasks.process_message', queue=app.config['RMQ_QUEUE_READ'])
 def process_message(message):
-    protobuf: ApiToSubtitleGenerator = ProtobufConverter.json_to_protobuf(message)
+    mediaPod: MediaPod = ProtobufConverter.json_to_protobuf(message)
+    protobuf = ApiToSubtitleGenerator()
+    protobuf.mediaPod.CopyFrom(mediaPod)
+    protobuf.IsInitialized()
 
     chunks = []
 
