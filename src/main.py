@@ -56,7 +56,7 @@ def process_message(message):
 
         partialMultiprocess = partial(multiprocess, protobuf=protobuf)
 
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=5) as executor:
             results = list(executor.map(partialMultiprocess, chunks))
 
         resultsSorted = sorted(results, key=extract_chunk_number)
